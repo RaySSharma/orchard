@@ -21,6 +21,7 @@ def load_sim_data(
     mass_units=1,
     to_haew_abs_neg=False,
     columns=None,
+    subset=None,
     **kwargs
 ):
     """
@@ -33,23 +34,23 @@ def load_sim_data(
         specs = None
         spec_wave = None
     else:
-        spec_wave = np.genfromtxt(data_dir + pointers["pointer_to_specwav"])
-        if pointers["pointer_to_spectra"][-3:] == "npy":
-            specs = np.load(data_dir + pointers["pointer_to_spectra"])
+        spec_wave = np.genfromtxt(pointers["pointer_to_specwav"])
+        if pointers["pointer_to_spectra"].suffix == ".npy":
+            specs = np.load(pointers["pointer_to_spectra"])
         else:
-            specs = np.genfromtxt(data_dir + pointers["pointer_to_spectra"])
+            specs = np.genfromtxt(pointers["pointer_to_spectra"])
 
     ## positions
     if pointers.get("pointer_to_posvel") == None:
         posvel = None
         print(sim_name + ": missing position data!")
     else:
-        if pointers["pointer_to_posvel"][-3:] == "csv":
+        if pointers["pointer_to_posvel"].suffix == ".csv":
             posvel_dat = np.genfromtxt(
-                data_dir + pointers["pointer_to_posvel"], delimiter=",", dtype=None
+                pointers["pointer_to_posvel"], delimiter=",", dtype=None
             )
         else:
-            posvel_dat = np.genfromtxt(data_dir + pointers["pointer_to_posvel"])
+            posvel_dat = np.genfromtxt(pointers["pointer_to_posvel"])
 
         posvel = posvel_dat[
             :, columns["posvel_col_start"] : (columns["posvel_col_start"] + 6)
@@ -65,9 +66,7 @@ def load_sim_data(
         if pointers["pointer_to_mass"] == pointers["pointer_to_posvel"]:
             mass = posvel_dat[:, columns["mass_col"]]
         else:
-            mass = np.genfromtxt(data_dir + pointers["pointer_to_mass"])[
-                :, columns["mass_col"]
-            ]
+            mass = np.genfromtxt(pointers["pointer_to_mass"])[:, columns["mass_col"]]
 
         if to_logm == True and to_mass_hcorr == False:
             mass = np.log10(mass * mass_units)
@@ -90,14 +89,14 @@ def load_sim_data(
             if pointers["pointer_to_sfr"] == pointers["pointer_to_posvel"]:
                 sfr = posvel_dat[:, columns["sfr_col"]]
             else:
-                if pointers.get("pointer_to_sfr")[-3:] == "csv":
+                if pointers.get("pointer_to_sfr").suffix == ".csv":
                     sfr = np.genfromtxt(
-                        data_dir + pointers["pointer_to_sfr"],
+                        pointers["pointer_to_sfr"],
                         delimiter=",",
                         skip_header=1,
                     )[:, columns["sfr_col"]]
                 else:
-                    sfr = np.genfromtxt(data_dir + pointers["pointer_to_sfr"])[
+                    sfr = np.genfromtxt(pointers["pointer_to_sfr"])[
                         :, columns["sfr_col"]
                     ]
 
@@ -112,14 +111,14 @@ def load_sim_data(
             if pointers["pointer_to_ssfr"] == pointers["pointer_to_posvel"]:
                 ssfr = posvel_dat[:, columns["ssfr_col"]]
             else:
-                if pointers.get("pointer_to_ssfr")[-3:] == "csv":
+                if pointers.get("pointer_to_ssfr").suffix == ".csv":
                     ssfr = np.genfromtxt(
-                        data_dir + pointers["pointer_to_ssfr"],
+                        pointers["pointer_to_ssfr"],
                         delimiter=",",
                         skip_header=1,
                     )[:, columns["ssfr_col"]]
                 else:
-                    ssfr = np.genfromtxt(data_dir + pointers["pointer_to_ssfr"])[
+                    ssfr = np.genfromtxt(pointers["pointer_to_ssfr"])[
                         :, columns["ssfr_col"]
                     ]
 
@@ -130,14 +129,14 @@ def load_sim_data(
         if pointers["pointer_to_censat"] == pointers["pointer_to_posvel"]:
             censat = posvel_dat[:, columns["censat_col"]]
         else:
-            if pointers.get("pointer_to_censat")[-3:] == "csv":
+            if pointers.get("pointer_to_censat").suffix == ".csv":
                 censat = np.genfromtxt(
-                    data_dir + pointers["pointer_to_censat"],
+                    pointers["pointer_to_censat"],
                     delimiter=",",
                     skip_header=1,
                 )[:, columns["censat_col"]]
             else:
-                censat = np.genfromtxt(data_dir + pointers["pointer_to_censat"])[
+                censat = np.genfromtxt(pointers["pointer_to_censat"])[
                     :, columns["censat_col"]
                 ]
     else:
@@ -152,7 +151,7 @@ def load_sim_data(
         gmag = None
         print(sim_name + ": Missing analyzed spectra data!")
     else:
-        simdat = np.genfromtxt(data_dir + pointers["pointer_to_specdat"], dtype=None)
+        simdat = np.genfromtxt(pointers["pointer_to_specdat"], dtype=None)
 
         if columns["d400_col"] is not None:
             d400 = simdat[:, columns["d400_col"]]
@@ -186,6 +185,11 @@ def load_sim_data(
         else:
             ngals = None
 
+    if subset is not None:
+        subset = np.bool_(np.loadtxt(subset))
+    else:
+        subset = np.ones_like(ngals).astype(np.bool)
+
     data_dict = {
         "sim_name": sim_name,
         "plot_color": plot_color,
@@ -202,6 +206,7 @@ def load_sim_data(
         "spectra": specs,
         "wavelength": spec_wave,
         "ngals": ngals,
+        "subset": subset,
     }
 
     return data_dict
@@ -610,20 +615,22 @@ class Simulation(object):
 
         self.calculate_surface_brightness()
 
-        mass = self.data["mass"]
-        rmag_app = self.obs["rmag_app"]
-        mu_app = self.obs["mu_rmag"]
-        dhost_distribution = self.obs["dhost_proj"]
+        ix = self.data["subset"]  # Run Orchard for a subset of the overall population
+
+        mass = self.data["mass"][ix]
+        rmag_app = self.obs["rmag_app"][ix]
+        mu_app = self.obs["mu_rmag"][ix]
+        dhost_distribution = self.obs["dhost_proj"][ix]
 
         digi_mass = np.digitize(mass, mass_bins)
         digi_dhost = np.digitize(dhost_distribution, dhost_bins)
 
         if self.run_params["add_noise_to_spectra"] == True:
-            haew = self.obs["noisy_haew"]
-            d400 = self.obs["noisy_d400"]
+            haew = self.obs["noisy_haew"][ix]
+            d400 = self.obs["noisy_d400"][ix]
         else:
-            haew = self.data["haew"]
-            d400 = self.data["d400"]
+            haew = self.data["haew"][ix]
+            d400 = self.data["d400"][ix]
 
         self.obs["qfrac_proj_vmax"] = np.zeros(
             (len(mass_bins) - 1, len(dhost_bins) - 1, 2)
@@ -635,7 +642,7 @@ class Simulation(object):
         self.calculate_vmax()
         print("Vmax calculated")
 
-        vmax_weights = self.obs["vmax"]
+        vmax_weights = self.obs["vmax"][ix]
 
         for j in range(len(mass_bins) - 1):
             for i in range(len(dhost_bins) - 1):
@@ -705,7 +712,7 @@ class Simulation(object):
 
         if self.run_params["save_qfrac"] == True:
             np.save(
-                self.__dict__["data_dir"] + self.data["sim_name"] + "_qfrac",
+                self.__dict__["out_dir"].joinpath(self.data["sim_name"] + "_qfrac"),
                 self.quenched_fractions,
             )
 
@@ -716,7 +723,9 @@ class Simulation(object):
         """calculates galaxy sizes with scatter"""
         Mstar = self.data["mass"]
         massSizes = np.loadtxt(
-            self.__dict__["data_dir"] + "robs_gama.dat", skiprows=1, usecols=[0, 2]
+            self.__dict__["data_dir"].joinpath("robs_gama.dat"),
+            skiprows=1,
+            usecols=[0, 2],
         )
 
         sigma = np.random.normal(loc=0.0, scale=0.5, size=Mstar.size)
