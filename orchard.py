@@ -1,4 +1,5 @@
 import time
+import pickle
 
 import numpy as np
 import scipy.interpolate as interp
@@ -706,10 +707,19 @@ class Simulation(object):
             else:
                 self.quenched_fractions[z] = self.obs["qfrac_proj_novm"]
 
+            if self.run_params["save_all_sightlines"] == True:
+                filename = self.__dict__["out_dir"].joinpath(self.data["sim_name"] + "_obs_{}.pickle".format(z))
+                with open(filename, "wb") as f:
+                    pickle.dump(self.obs, f)
+
+                filename = self.__dict__["out_dir"].joinpath(self.data["sim_name"] + "_data_{}.pickle".format(z))
+                with open(filename, "wb") as f:
+                    pickle.dump(self.data, f)
+
             ndur = time.time() - ttstart
             print("Sightline " + np.str(z) + " complete in {0}s".format(ndur))
             print("\n")
-
+                
         if self.run_params["save_qfrac"] == True:
             np.save(
                 self.__dict__["out_dir"].joinpath(self.data["sim_name"] + "_qfrac"),
